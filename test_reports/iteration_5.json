@@ -1,0 +1,45 @@
+{
+  "summary": "End-to-end testing of iteration-5 NOCTUA.osint mega-batch: 9 new backend features (Parameter Miner, Cloud Config Hunter, API Auditor, Scan Delta /diff, Scan History, Auto-Tagging IA, Global Threat Correlation, Version Tracker, Bug Bounty Reports CRUD) + 2 UI additions (7th 'Bug Bounty Toolkit' tab + tag pills on dashboard scan cards) + schedules.py severity bump. Wrote /app/backend/tests/test_bounty_batch.py with 26 pytest cases — 26/26 passing in ~13s. Notable coverage: /diff no-history + same-domain + cross-domain 400, cache behavior on all bounty endpoints, cross-user flag propagation via /flag → /correlate, version rollback detection (jquery 3.6.0 → 3.4.0 seeded), Bug Bounty CRUD (POST/GET/PATCH/DELETE + status filter + domain filter + invalid status 400 + other-user's-scan 404), /api/scans list surfaces tags/flagged/primary_category, schedules._detect_changes emits '🎯 NUEVO ACTIVO' with severity='high'. Frontend Playwright pass verified: 5 tag pills render on Dashboard scan card with '+1' overflow, 7th 'Bug Bounty Toolkit' tab visible + clickable, ScanDiffPanel + all 5 BountyTab sections (Parameter Miner, Cloud & Dev Config Hunter, API Auditor, Version Tracker, Grafo Global) rendered with 'Ejecutar' buttons and 'diff-vs-select' + 'run-diff-btn' testids present, all previous 6 tabs still navigable and predictive-tab still renders.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/scans/{id}/param-miner", "issue": "PARAM_ACCESS_RE has a broken regex (line 29 mixes single and double quotes inside a re.VERBOSE raw string — the tokenizer treats the leading '\"' inside the raw string as an actual quote, ending the first line early). Currently the regex still 'works' because the wordlist path fills in defaults, but the js/param access source is effectively never matched. Recommend rewriting the regex on one line without VERBOSE, or fixing the quoting so 'js_access' can actually surface."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "ScanDetail.jsx (imports)", "issue": "ScanDetail.jsx had DUPLICATE imports of `axios` (line 3 and line 29) and `toast` (line 4 and line 30) causing a hard compile-time SyntaxError ('Identifier axios has already been declared'). The whole frontend was showing the 'Compiled with problems' red overlay and every route was broken. I removed the duplicate imports (both were re-added when BountyTab/ScanDiffPanel were introduced). After the fix the app compiles cleanly and all 7 tabs render.", "selector": "src/pages/ScanDetail.jsx L29-30", "priority": "CRITICAL"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_bounty_batch.py",
+    "/app/backend/tests/conftest.py",
+    "/app/test_reports/pytest/bounty_batch.xml"
+  ],
+  "action_items": [
+    "CONFIRM the duplicate-imports fix in ScanDetail.jsx (I removed the duplicate `import axios from \"axios\"` and `import { toast } from \"sonner\"` lines that appeared right after the BountyTab import). This was blocking the entire frontend — a lint/prettier hook would prevent recurrence.",
+    "Consider fixing param_miner.PARAM_ACCESS_RE regex quoting so js_access param detection actually fires (currently only wordlist candidates are surfaced)."
+  ],
+  "critical_code_review_comments": [
+    "ScanDetail.jsx introduced duplicate imports (axios + toast) when BountyTab/ScanDiffPanel were added. Compile error was breaking the entire SPA. A CI lint step (eslint no-duplicate-imports) would catch this instantly.",
+    "server.py — 3 endpoints POST /api/scans/{id}/auto-tag, /flag, /tags read `_load_scan` first then do a db.scans.update_one({'scan_id': scan_id}) without re-scoping user_id. Safe today because _load_scan already enforces ownership, but any refactor could open a cross-tenant write. Recommend a helper `_scoped_scan_update(scan_id, user_id, patch)` used everywhere.",
+    "server.py — GET /api/scans/history/{domain} lowercases the domain in the mongo query but not in the response echo (`domain=domain` where the URL-cased value is returned). Consider echoing the normalized value so clients stay in sync.",
+    "integrations/global_correlation.py — `same_ssl_issuer_org` signal is very noisy (any two sites sharing a big cert issuer like 'Let's Encrypt' will correlate). Consider a name-blacklist or minimum-length + issuer-org allowlist. Also the `count` local var is set but never used.",
+    "integrations/param_miner.py — PARAM_ACCESS_RE has quoting bugs inside re.VERBOSE + raw-string that likely make the pattern degenerate; js_access sources are effectively unreachable.",
+    "server.py DELETE /api/bounty/reports/{finding_key} deletes by (user_id, finding_key) even without scan_id, meaning if the same finding_key was submitted for multiple scans, an untargeted DELETE nukes one arbitrary record. Recommend requiring scan_id (400) or delete-many.",
+    "Bounty PATCH accepts any string in .notes/.severity via body without validating severity against a controlled vocab (critical/high/medium/low/info). Same for .status which the CREATE endpoint DOES validate — should validate on PATCH too."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_bounty_batch.py (new — 26 tests)",
+    "/app/frontend/src/pages/ScanDetail.jsx (removed duplicate axios + toast imports that were breaking compilation)"
+  ],
+  "success_rate": {"backend": "100% (26/26)", "frontend": "100% after removing duplicate imports (all 7 tabs, tag pills, ScanDiffPanel, BountyTab sections verified)"},
+  "test_credentials": "Pro/Free sessions minted directly in Mongo via /app/memory/test_credentials.md pattern. UI Pro token + seed scan cleaned up at end of run.",
+  "seed_data_creation": "test_bounty_batch.py: uses transient free/pro fixtures + seeded example.com scan doc injected directly into `scans` collection (bypasses 60-90s real scan). For /diff same-domain: seeded 2 scans of diff-example.local with created_at 2 days apart and ports 80 vs 80+22. For /diff cross-domain 400: seeded alpha.local + beta.local. For scan history: 2 hist.local + 1 other.local. For cross-user flag propagation: seeded USER_A scan on attacker-xxx.local ip 5.x.y.z + USER_B scan on victim-xxx.local same ip, flagged A, correlated B. For version rollback: seeded prev vt-test.local jquery 3.6.0 + current jquery 3.4.0. UI test: seeded scan_ui_ with 5 tags to verify overflow +1 rendering. All seed data cleaned in fixture teardown.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend is 100% green on 26 tests. Only remaining minor: param_miner regex has quoting bug (js_access sources never surface — wordlist still works). Frontend was BROKEN by a duplicate-import in ScanDetail.jsx (axios+toast) — I fixed it in-place; verify main agent's diff. All 7 tabs, tag pills, and Bug Bounty Toolkit sections render + navigate. Playwright viewport 1920x4000, session cookie 'session_token'.",
+  "rca of the issue": "Duplicate imports in ScanDetail.jsx: when BountyTab/ScanDiffPanel imports were added at lines 26-28, someone re-added `import axios from 'axios'` (line 29) and `import { toast } from 'sonner'` (line 30) even though both already existed at lines 3-4. Babel refused to compile the module, and since App.js imports ScanDetail eagerly, the entire SPA showed a red compile overlay. Fixed by removing lines 29 + 30. Test steps to reproduce originally: any user visits any route → sees 'Compiled with problems: Identifier axios has already been declared. (29:7)'. After fix: all routes and 7 tabs render correctly."
+}

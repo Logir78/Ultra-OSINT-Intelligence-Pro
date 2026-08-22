@@ -1,0 +1,110 @@
+@import url("https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;900&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600;700&display=swap");
+
+:root {
+  /* Deep dark command dashboard palette */
+  --void: #000000;
+  --deep: #050506;
+  --panel: #0A0A0C;
+  --panel-2: #101014;
+  --hairline: rgba(255, 255, 255, 0.06);
+  --hairline-strong: rgba(255, 255, 255, 0.12);
+  --text: #F5F5F7;
+  --text-dim: #8A8A94;
+  --text-mute: #4E4E56;
+  /* Accents */
+  --neon-cyan: #00E5FF;
+  --neon-green: #39FF14;
+  --neon-blue: #4C8BFF;
+  --alert-red: #FF3355;
+  --alert-amber: #FFAA00;
+}
+
+body {
+  background: var(--void);
+  color: var(--text);
+}
+
+.App {
+  font-family: "IBM Plex Sans", sans-serif;
+  background: var(--void);
+}
+
+.font-heading { font-family: "Outfit", sans-serif; }
+.font-mono-data { font-family: "JetBrains Mono", monospace; }
+
+/* Grain overlay */
+.grain::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.04;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='0.9'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Grid backdrop for command dashboards */
+.grid-backdrop {
+  background-image:
+    linear-gradient(rgba(0, 229, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 229, 255, 0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* Scanning bar */
+@keyframes scan {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+.scan-bar {
+  animation: scan 1.6s linear infinite;
+}
+
+.neon-focus:focus-within {
+  box-shadow: 0 0 0 1px var(--neon-cyan), 0 0 24px rgba(0, 229, 255, 0.25);
+}
+
+.data-value {
+  color: var(--neon-green);
+  font-family: "JetBrains Mono", monospace;
+  font-weight: 700;
+  text-shadow: 0 0 12px rgba(57, 255, 20, 0.3);
+}
+
+/* Tab pill hover glow */
+.tab-active {
+  box-shadow: 0 0 40px rgba(0, 229, 255, 0.15), inset 0 -2px 0 var(--neon-cyan);
+}
+
+::selection { background: rgba(0, 229, 255, 0.35); color: #fff; }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--void); }
+::-webkit-scrollbar-thumb { background: #1a1a20; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #2a2a30; }
+
+/* Blinking cursor for terminal aesthetic */
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+.term-cursor::after {
+  content: "▊";
+  animation: blink 1.2s step-end infinite;
+  margin-left: 2px;
+  color: var(--neon-cyan);
+}
+
+/* Leaflet dark theme overrides */
+.leaflet-container { background: var(--void) !important; }
+.leaflet-tile { filter: hue-rotate(180deg) invert(0.92) brightness(0.75) contrast(1.1); }
+.leaflet-popup-content-wrapper, .leaflet-popup-tip {
+  background: var(--panel) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--hairline-strong);
+}
+.leaflet-control-attribution {
+  background: rgba(0,0,0,0.7) !important;
+  color: var(--text-mute) !important;
+}
+.leaflet-control-attribution a { color: var(--neon-cyan) !important; }

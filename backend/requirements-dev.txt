@@ -1,0 +1,15 @@
+# Development & CI tooling (not needed at runtime).
+# Runtime deps live in requirements.txt.
+#
+# NOTE: some of these tools are currently also pinned in requirements.txt
+# (black, mypy, flake8, pytest...). Long term you can remove them from the
+# runtime file and keep them only here to slim production images.
+
+ruff==0.6.9
+black==26.5.1
+mypy==2.3.0
+flake8==7.3.0
+isort==8.0.1
+pytest==9.1.1
+pytest-xdist==3.8.0
+pre-commit==3.8.0

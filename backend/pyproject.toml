@@ -1,0 +1,31 @@
+# Tooling config for the NOCTUA backend (black / ruff / mypy / pytest).
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["tests"]
+
+[tool.ruff.lint]
+# Start lenient so the existing codebase passes; tighten over time.
+select = ["E", "F", "W", "I", "UP", "B"]
+ignore = [
+    "E501",  # line length handled by black
+    "B008",  # FastAPI uses function calls (Depends/Header) in defaults by design
+]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+# Lenient baseline for a large existing codebase; raise the bar incrementally.
+check_untyped_defs = false
+warn_unused_ignores = true
+warn_redundant_casts = true
+exclude = ["tests/"]
+
+[tool.pytest.ini_options]
+# Mirrors backend/pytest.ini. Kept here for tooling that reads pyproject.
+addopts = "-n 2 --dist loadscope"

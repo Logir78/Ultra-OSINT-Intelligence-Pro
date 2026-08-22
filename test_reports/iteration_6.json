@@ -1,0 +1,48 @@
+{
+  "summary": "Iteration-6 NOCTUA.osint bug-bounty batch tested end-to-end. Added /app/backend/tests/test_iteration6_bounty.py with 11 focused tests (Takeover fingerprints DB size + new-services + endpoint 200, JS Miner _discover_js .map probing unit test + /js-miner schema unchanged, IDOR analyzer free-user empty, IDOR numeric+UUID pattern extraction + fuzz variation counts + cache, Supply-Chain empty-libs graceful, Supply-Chain jquery-1.9.0/wordpress-4.6.0 vs OSV.dev + cache). All 11/11 pass. Regression: previous test_bounty_batch.py still 26/26. Live OSV.dev query for jquery 1.9.0 returned real CVEs (CVE-2019-11358, CVE-2020-11023, CVE-2015-9251). Frontend Playwright: /scan/{id} → Bug Bounty Toolkit tab renders all 7 sections in order (Parameter Miner, Cloud & Dev Config, API Auditor, Version Tracker, Grafo Global, IDOR Analyzer, Supply Chain — the last two BELOW Grafo Global as required). All 7 Ejecutar buttons clickable; IDOR click → GET /api/scans/{id}/idor → 200; Supply Chain click → GET /api/scans/{id}/supply-chain → 200 and UI rendered '1 lib analizada, 3 vulnerabilidades' with jquery 1.9.0 + 3 CVE badges. No compile / lint errors.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/scans/{id}/idor", "issue": "In idor_analyzer._generate_variations, numeric branch appends -3..+3 (guarded >0), +100, +1000, then '0','1','-1' — for a value like 123 this yields 11 items and the array is [:10]-truncated, so '-1' (an interesting negative-integer edge case) is dropped. Consider prepending [0,1,-1] before the delta loop or bumping the cap to 12."},
+      {"endpoint": "GET /api/scans/{id}/idor", "issue": "counts_by_risk only ever emits 'critical' + 'high' keys (per _classify_context) but the review contract advertises the presence of both — currently only present when there are findings of that risk. Frontend safely uses ?.critical || 0. Consider always seeding {critical:0, high:0} for a stable schema."},
+      {"endpoint": "GET /api/scans/{id}/supply-chain", "issue": "ECOSYSTEM_MAP defaults every unknown library to 'npm' — this silently misclassifies e.g. 'apache' or 'nginx' as npm packages and wastes OSV.dev calls. Consider skipping the query when ecosystem is unknown, or querying multiple ecosystems (OSV.dev supports package-only queries)."},
+      {"endpoint": "GET /api/scans/{id}/supply-chain", "issue": "In _query_osv, `worst = min(vulns, key=severity_rank)` picks the FIRST (lowest-rank = MOST severe) — which is semantically the WORST, so the variable name is correct. However, the sort tie-breaks on insertion order only, so for two 'critical' vulns you get the first API-returned one. Consider secondary sort by cvss_score desc for determinism."},
+      {"endpoint": "GET /api/scans/{id}/idor", "issue": "AI reasoning failure is logged as WARNING and ai_recommendations stays None — good. But the JSON parse `re.search(r'\\{.*\\}', text, re.DOTALL)` will greedily match across ```-fenced blocks; if the LLM returns two objects the outer one may straddle both. Consider using the AI SDK's response_format=json or the code-fence regex used in other integrations."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "BountyTab / Supply Chain section", "issues": ["When only 'low'-severity CVEs exist (e.g. jquery 1.9.0), the top-line counts card 'Críticas: 0' is orange, but individual CVE severity pills all render green — visually consistent, but there is no summary card for 'low' or 'medium', so a viewer can't tell at a glance how many CVEs are being displayed vs their breakdown. Consider adding a 4th counter card for 'low/medium' or a stacked bar."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration6_bounty.py",
+    "/app/backend/tests/test_bounty_batch.py",
+    "/app/test_reports/pytest/iteration6.xml"
+  ],
+  "action_items": [
+    "Optional: broaden idor_analyzer numeric variation cap so '-1' isn't truncated when 123-style IDs hit >10 candidates.",
+    "Optional: initialize counts_by_risk with {critical:0, high:0} for schema stability.",
+    "Optional: skip OSV.dev query for libraries with unknown ecosystem instead of defaulting to 'npm' (noisy 404s).",
+    "Optional: add a 'low/medium' summary card in the Supply Chain UI panel so users can gauge count vs severity distribution."
+  ],
+  "critical_code_review_comments": [
+    "supply_chain.ECOSYSTEM_MAP silently defaults everything unknown to 'npm' — this is functionally OK (OSV returns empty for wrong-ecosystem lookups) but wastes API roundtrips and can mislead. Prefer a stricter map + skip-if-unknown.",
+    "idor_analyzer._generate_variations numeric path: variations.append order results in interesting values like '-1' being sliced off by the [:10] cap for typical IDs. Move [0,1,-1] to front or raise cap.",
+    "idor_analyzer.analyze_idor JSON extraction uses greedy `re.search(r'\\{.*\\}', text, re.DOTALL)` — brittle for markdown-wrapped LLM output. Server has robust JSON-extraction helpers elsewhere; reuse them.",
+    "server.py GET /scans/{id}/idor merges js_miner/api_audit/param_miner into a shallow copy of doc['result'] but only if those keys are present as top-level fields on the doc. If those endpoints stored their result inside doc['result'] (as some legacy integrations do), the merge misses them. Consider also probing doc['result'].get('js_miner') etc.",
+    "js_miner._discover_js applies MAX_FILES cap twice — once to js_urls then again to map_urls[:MAX_FILES]. Net effect can be up to 2×MAX_FILES combined URLs, which is fine but the function docstring/log message should reflect the effective upper bound."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration6_bounty.py (new — 11 tests, 11/11 pass)"
+  ],
+  "success_rate": {"backend": "100% (11/11 new + 26/26 regression = 37/37)", "frontend": "100% (all 7 sections render, IDOR + Supply Chain buttons fire correct API calls, live CVE data rendered)"},
+  "test_credentials": "Pro/Free sessions minted directly in Mongo via /app/memory/test_credentials.md pattern.",
+  "seed_data_creation": "test_iteration6_bounty.py uses _seed_scan() which inserts a synthetic scan doc into MongoDB with configurable tech_analysis/api_audit/js_miner fields to avoid the 60-90s real-scan wait. For IDOR: seeded api_audit.findings with numeric URL (/api/v1/users/123, /api/v1/orders/999/details) and UUID URL (/api/v2/profile/<uuid>). For Supply Chain vulnerable-lib: seeded tech_analysis with jquery 1.9.0 + wordpress 4.6.0 — OSV.dev returned CVE-2019-11358, CVE-2020-11023, CVE-2015-9251 for jquery. UI test: pro-plan seed scan with jquery 1.9.0 lib, verified all 7 BountyTab sections + live rendering of GHSA-* + CVE-* IDs. All seed data cleaned up in fixture teardowns.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All 4 iteration-6 features (Takeover fingerprints 80 entries, JS Miner .map probing, IDOR analyzer w/ AI, Supply Chain vs OSV.dev) are green. OSV.dev IS reachable from the sandbox. Full regression via test_bounty_batch.py still 26/26. Frontend BountyTab section-at-module-scope refactor is verified — no ESLint warnings, all 7 sections render with icons + Ejecutar buttons + data-testids. If a future iteration touches idor_analyzer, note that _generate_variations['-1'] can be truncated by the [:10] cap. Public endpoint: https://domain-scanner-16.preview.emergentagent.com. Session cookie is `session_token`. Total backend endpoints touched this iter: /takeover, /js-miner (schema), /idor (new), /supply-chain (new).",
+  "rca of the issue": "N/A — no bugs found this iteration. Two initial test-side false-fails were adjusted (endpoint path /takeover-scan → /takeover as per server.py L674; js_miner schema key targets_processed → js_files_analyzed as per actual response) — no product code changed."
+}

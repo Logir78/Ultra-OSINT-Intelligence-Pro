@@ -1,0 +1,108 @@
+{
+  "theme": "dark",
+  "typography": {
+    "fonts": {
+      "heading": "Outfit, sans-serif",
+      "body": "IBM Plex Sans, sans-serif",
+      "mono": "JetBrains Mono, monospace"
+    },
+    "scales": {
+      "h1": "text-4xl sm:text-5xl tracking-tighter font-black text-white",
+      "h2": "text-2xl sm:text-3xl tracking-tight font-bold text-white/90",
+      "h3": "text-xl font-semibold tracking-tight text-white/80",
+      "h4": "text-sm uppercase tracking-[0.2em] font-medium text-white/50",
+      "body": "text-sm leading-relaxed text-white/70",
+      "mono_data": "font-mono text-sm tracking-tight text-cyan-400"
+    },
+    "usage_rules": "Never use Inter for headings. Use JetBrains Mono for all IP addresses, Ports, Domains, and raw technical data. Use Outfit for prominent marketing/dashboard headings."
+  },
+  "colors": {
+    "background": "#050505",
+    "surface": "#0C0C0E",
+    "surface_hover": "#141417",
+    "border": "rgba(255, 255, 255, 0.1)",
+    "primary": "#00E5FF",
+    "primary_hover": "#00B8CC",
+    "text": {
+      "primary": "#FFFFFF",
+      "secondary": "rgba(255, 255, 255, 0.7)",
+      "muted": "rgba(255, 255, 255, 0.4)"
+    },
+    "status": {
+      "secure": "#00FF66",
+      "warning": "#FFB000",
+      "critical": "#FF3366",
+      "info": "#3B82F6"
+    }
+  },
+  "visual_enhancers": {
+    "surface_strategy": "Grid Borders (Technical Look). Expose the skeleton with border-collapse layouts and 1px borders on the right and bottom of grid items. Use sharp edges (max 4px border-radius) or completely square corners.",
+    "glassmorphism": "Only for sticky headers/floating navs: bg-black/60 with backdrop-blur-xl and border-b border-white/10.",
+    "effects": "Subtle drop shadows on critical metrics. Use neon glow (box-shadow or radial-gradient) sparingly for 'Vulnerable' or 'Critical' alerts to make them pop against the dark void.",
+    "textures": "Incorporate a subtle noise/grain overlay globally to reduce digital flatness and enhance the 'Tactical Pro' feel."
+  },
+  "layouts": {
+    "dashboard_grid": "High Density Grid (Mode B). grid-cols-1 md:grid-cols-3 lg:grid-cols-4 with tight gap-4. Every pixel utilized.",
+    "spacing_strategy": "Generous Spacing (p-6 or p-8 inside structural containers). Never cramp data. Use tabular-nums for numerical data alignment.",
+    "sidebar": "Collapsible left-sidebar or strict F-pattern layout for navigation. Includes anchor links or tabs to jump to WHOIS, DNS, SSL, etc."
+  },
+  "components": {
+    "domain_search": "Massive, prominent search bar (similar to a terminal prompt or search engine). Uses neon glowing border on focus. Include a primary CTA button inline.",
+    "cards": "Flat, 1px border, rectangular (no Shadcn default rounded Card). Use raw divs with border-white/10 and background #0C0C0E.",
+    "badges": "Sharp edges, 10% opacity background of the status color, solid text color (e.g., bg-red-500/10 text-red-500).",
+    "charts": "Recharts or Shadcn charts customized with primary/status colors. Avoid generic colorful palettes; stick to the tactical color scheme.",
+    "tabs": "Use horizontal or vertical tabs to jump between report sections (WHOIS, Headers, IP, etc.) to prevent infinite scrolling fatigue."
+  },
+  "motion": {
+    "interactions": "Hover states slightly lift (-translate-y-0.5) with border color change. Fast, technical transitions (0.15s ease).",
+    "entrance": "Staggered fade-up for bento grid cards to simulate 'scanning' completion. Use framer-motion.",
+    "loading": "Simulate terminal typing or linear progress bars scanning the domain for realism."
+  },
+  "accessibility": {
+    "contrast": "Ensure APCA minimums. Text on status backgrounds must have high contrast (3:1 minimum).",
+    "testing": "All interactive and key informational elements MUST include a data-testid attribute (e.g., data-testid='domain-search-input')."
+  },
+  "image_urls": {
+    "hero_background": {
+      "url": "https://images.pexels.com/photos/26765065/pexels-photo-26765065.png?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "description": "Green binary matrix for login screen or landing page background overlay (use with heavy opacity reduction/blend mode).",
+      "category": "background"
+    },
+    "user_avatar": {
+      "url": "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NTJ8MHwxfHNlYXJjaHwzfHx1c2VyJTIwcHJvZmlsZSUyMHBvcnRyYWl0JTIwcHJvZmVzc2lvbmFsfGVufDB8fHx8MTc4NDQ1MDE2M3ww&ixlib=rb-4.1.0&q=85",
+      "description": "Professional user portrait for dashboard top-right profile dropdown.",
+      "category": "avatar"
+    }
+  },
+  "instructions_to_main_agent": [
+    "Build a Dark Mode ONLY application. Set dark classes explicitly and assume a dark background globally (#050505).",
+    "Install and use Phosphor Icons or lucide-react for sharp, technical iconography.",
+    "Implement Google Auth layout on the Login page.",
+    "Dashboard should have a history of scanned domains (table or list) and a large top search bar.",
+    "The analysis results page MUST be organized into clear sections: WHOIS, DNS Records, SSL Certificates, Subdomains, HTTP Headers, HTTPS Headers, Associated IP, Open Ports, Security Status (basic/medium/advanced), AI-powered Risk Summary.",
+    "Create a vertical side-navigation (tabs) in the analysis page to jump to specific report sections quickly.",
+    "Implement visual risk indicators (e.g., severity badges, color-coded status circles).",
+    "Create a prominent 'Export/Copy' button near the top right of the analysis view.",
+    "The 'AI-powered Risk Summary' should be visually distinct from raw data sections (perhaps a glowing border or unique surface) to highlight AI-driven insights."
+  ],
+  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": [
+    "You tend to converge toward generic, 'on distribution' outputs. In frontend design, this creates what users call the 'AI slop' aesthetic. Avoid this: make creative, distinctive frontends that surprise and delight.",
+    "Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients.",
+    "Don't make generic centered layouts, simplistic gradients, and uniform styling.",
+    "Create depth through layered design elements with z-index hierarchy.",
+    "Use glass-morphism effects with backdrop filters (12-24px blur).",
+    "You MUST NOT apply universal transition. Eg: transition: all. This results in breaking transforms. Always add transitions for specific interactive elements like button, input excluding transforms.",
+    "You MUST NOT center align the app container, ie do not add .App { text-align: center; } in the css file. This disrupts the human natural reading flow of text.",
+    "Always use modern button styles like pill-shaped, or sharp button with interaction animations & color relevant to the app style.",
+    "NEVER: use AI assistant Emoji characters like 🤖🧠💭💡🔮🎯 etc for icons.",
+    "Every interaction needs micro-animations - hover states, transitions, parallax effects, and entrance animations. Static = dead.",
+    "Use 2-3x more spacing than feels comfortable. Cramped designs look cheap.",
+    "Subtle grain textures, noise overlays, custom cursors, selection states, and loading animations: separates good from extraordinary.",
+    "Main agent relies on these image URLs. Missing categories (especially sponsor logos) = main agent will use placeholder text which is FORBIDDEN.",
+    "Prioritize using pre-existing components from src/components/ui when applicable.",
+    "Create new components that match the style and conventions of existing components when needed.",
+    "Examine existing components to understand the project's component patterns before creating new ones.",
+    "Use `sonner` for toasts.",
+    "Sonner component are located in `/app/src/components/ui/sonner.tsx`"
+  ]
+}

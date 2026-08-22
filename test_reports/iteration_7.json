@@ -1,0 +1,59 @@
+{
+  "summary": "Iteration-7 NOCTUA.osint 4-endpoint bug-bounty batch tested end-to-end. Added /app/backend/tests/test_iteration7_bounty.py with 13 tests (12 passed, 1 xfailed documenting a KNOWN BUG in save_keys). All 4 new endpoints (logic-flow, reverse-ip, github-miner, bot-resistance) return correct schema + cache correctly on 2nd call: logic-flow returns flows_detected:0 + empty scenarios when no flows found and calls AI when js_miner+api_audit populated; reverse-ip against example.com hit HackerTarget live (500 neighbors + ASN 'EDGECAST-NETBLK-03' from ARIN RDAP + 234 interesting), no-IP path returns note gracefully; github-miner without PAT returns configured:false + note (Spanish); bot-resistance against example.com returned score 15/100, risk:critical, waf_hint:Cloudflare, 8-req rate-limit probe worked. PROVIDERS list contains 'github' and GET /api/settings/keys surfaces github entry. Regression: previous 26 (test_bounty_batch) + 11 (test_iteration6_bounty) still 100% pass (37/37) after one test-only tolerance fix. Frontend Playwright: /scan/{id} → Bug Bounty Toolkit tab renders ALL 11 bounty sections in the expected order (Time-Travel + 11 bounty sections = 12 total <section>s). All 4 new EJECUTAR buttons clickable and return 200 with correct data rendered (Vecindad de Red shows 500 neighbors table; Resistencia a Bots shows Cloudflare WAF + critical verdict; GitHub Miner shows unconfigured note; Detective de Lógica shows '0 flujos'). Note: The task said 'new sections after Supply Chain' but the code has Supply Chain LAST — new sections are between IDOR and Supply Chain. Functionality unaffected.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/settings/keys", "issue": "KeyError('github') when client sends `github_changed:true` — TEST_FUNCS dict in user_settings.py has no 'github' entry, so save_keys line 568 crashes with a 500. Only the `_changed:false` (trusted) path works. This means ANY frontend save of a NEW github PAT will 500. Add a no-op test function for github (or skip validation for providers not in TEST_FUNCS).", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "reverse_ip._rdap_asn_info", "issue": "The 'asn' field is misnamed — it currently returns startAddress+' - '+endAddress (an IP range), not the Autonomous System Number (which requires an rdap/autnum lookup). Consider adding a proper /rdap/autnum/{asn} lookup or rename the field to 'ip_range'."},
+      {"endpoint": "GET /api/scans/{id}/logic-flow", "issue": "Uses greedy `re.search(r'\\{[\\s\\S]*\\}', text)` to extract JSON — same brittle pattern as idor_analyzer noted in iteration-6. If LLM wraps output in markdown fences with multiple objects, outer match may straddle. Reuse the robust extraction helper."},
+      {"endpoint": "GET /api/scans/{id}/github-miner", "issue": "Even without a PAT, endpoint result is CACHED — meaning if a user later adds a github key, they'll still see the 'not configured' result until the cache is manually cleared. Consider not caching when configured=false, or clearing the cache on save_keys."},
+      {"endpoint": "GET /api/scans/{id}/bot-resistance", "issue": "Fires 8 concurrent GETs against target — this is a real active probe. On sensitive targets this could trigger the very WAF being evaluated. Should require explicit user consent (checkbox) or throttle to 3-4 requests."},
+      {"endpoint": "GET /api/scans/{id}/bot-resistance", "issue": "LOGIN_FORM_HINT regex uses lookahead in 'action' attribute but only picks form actions containing 'login|signin|auth|session' — many SPAs render the login form via JS and won't have an <form> at all. Consider probing /login, /signin, /account/login directly as fallbacks."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "BountyTab section order", "issues": ["Task said 'new sections appear after Supply Chain' but implementation places the 4 new sections BEFORE Supply Chain (Supply Chain is last). Functional impact: none. Cosmetic mismatch with the spec — E1 should confirm which ordering is desired."]},
+      {"screen": "BountyTab EJECUTAR buttons", "issues": ["No data-testid attributes on any Section component's button or heading — future automated testing is fragile. Consider adding data-testid=`bounty-section-{key}-run` to each button."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration7_bounty.py",
+    "/app/backend/tests/test_iteration6_bounty.py",
+    "/app/backend/tests/test_bounty_batch.py",
+    "/app/test_reports/pytest/iteration7.xml",
+    "/app/test_reports/pytest/iteration7_regression.xml"
+  ],
+  "action_items": [
+    "HIGH — Fix POST /api/settings/keys: add a github handler (either register a no-op TEST_FUNCS entry that validates GitHub PAT via GET https://api.github.com/user, or skip validation for providers with no TEST_FUNCS entry). Currently new-key saves 500 for github.",
+    "Consider a proper ASN lookup in reverse_ip.py (currently 'asn' field is an IP-range string, not an AS number).",
+    "Don't cache github-miner result when configured=false (so the endpoint recomputes once the PAT is added).",
+    "Consider a consent checkbox / lower concurrency for bot-resistance (8 concurrent GETs is aggressive).",
+    "Add data-testid attributes to each BountyTab Section run button for future test stability.",
+    "Reconcile section order with spec: task said new 4 come after Supply Chain, but Supply Chain is now last."
+  ],
+  "critical_code_review_comments": [
+    "user_settings.py: PROVIDERS was extended to include 'github' but TEST_FUNCS was NOT — save_keys and test-key routes both key-lookup TEST_FUNCS[provider] and will KeyError for github. This is a broken invariant.",
+    "server.py logic-flow route: dict(doc.get('result') or {}) then merges doc.get(k) for js_miner/api_audit — good, but doesn't also merge doc.get('result').get('js_miner') if legacy nested. Same pattern as flagged in iteration-6 IDOR review.",
+    "bot_resistance.evaluate(): 8 concurrent HTTP GETs with User-Agent 'NOCTUA-osint/{i}' is a clear active probe. Should be behind a 'consent' or 'ethical-use' flag; also may trigger the very WAF/rate-limit the endpoint is trying to detect — self-fulfilling result.",
+    "github_miner.search_github(): 2 code-search queries + N per-hit GET requests for content — with a real PAT and 30 hits, this is ~60 GH API calls per scan. GH rate limit is 5k/hr — fine for casual use but should be documented (and 403 already handled).",
+    "reverse_ip._rdap_asn_info(): field named 'asn' but populated with an IP range string — semantic bug even if the UI renders it correctly."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration7_bounty.py (new — 13 tests, 12 pass + 1 xfail)",
+    "/app/backend/tests/test_iteration6_bounty.py (bumped numeric fuzz_ids upper bound 10 → 12 to reflect the fix E1 shipped for the '-1' truncation issue from iteration-6 review)"
+  ],
+  "success_rate": {
+    "backend": "100% (12/12 new passed, 1 xfail documenting KNOWN BUG in save_keys github handler) + 100% regression (26/26 test_bounty_batch + 11/11 test_iteration6_bounty)",
+    "frontend": "100% (all 11 bounty sections render, all 4 new Ejecutar buttons trigger correct API 200 responses with data)"
+  },
+  "test_credentials": "Pro/Free sessions minted directly in Mongo via /app/memory/test_credentials.md pattern. UI test seeded a fresh pro user + session cookie for /scan/{id} navigation.",
+  "seed_data_creation": "test_iteration7_bounty.py._seed_scan() inserts a synthetic scan with configurable js_miner/api_audit findings so logic-flow can be tested in both empty and populated states. Frontend UI test seeded a pro-plan user + session_token cookie + a synthetic example.com scan to load /scan/{id}. All fixture data cleaned up in teardown.",
+  "retest_needed": true,
+  "main_agent_can_self_test": false,
+  "context_for_next_testing_agent": "All 4 iteration-7 endpoints (logic-flow, reverse-ip, github-miner, bot-resistance) are functionally green. The ONE HIGH bug is that POST /api/settings/keys crashes with 500 (KeyError) when a github key is submitted with the standard `github_changed:true` payload — because TEST_FUNCS in user_settings.py has no github handler. The frontend WILL send github_changed:true when the user actually types a new key, so this bug will break the real user flow even though the DB-based test path passes. Reproduce: POST {'api_keys': {'github': 'ghp_xxx', 'github_changed': true}} → 500. Fix suggestion: add a `test_github` function that pings GET https://api.github.com/user with the PAT and register it in TEST_FUNCS. Verify with test_save_github_key_with_changed_true_currently_crashes (currently xfailed). Public endpoint: https://domain-scanner-16.preview.emergentagent.com. Session cookie is `session_token`.",
+  "rca of the issue": "POST /api/settings/keys → save_keys at server.py:568 does `res = await TEST_FUNCS[p](v)`. When p='github' and github_changed=true, python raises KeyError('github') because user_settings.TEST_FUNCS only maps shodan/abuseipdb/hibp/rapidapi. FastAPI catches this and returns 500. The trusted-key path (github_changed=false) works because it skips the TEST_FUNCS call entirely. Test coverage: test_save_github_key_persists (PASS, trusted path) + test_save_github_key_with_changed_true_currently_crashes (XFAIL, documents the bug). Fix: add a github ping-user function to TEST_FUNCS OR change save_keys to `TEST_FUNCS.get(p)` and skip validation if None."
+}

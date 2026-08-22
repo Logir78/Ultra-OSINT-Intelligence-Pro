@@ -1,0 +1,49 @@
+{
+  "summary": "End-to-end testing of the massive iteration-4 batch of NOCTUA.osint advanced modules. Wrote /app/backend/tests/test_advanced_modules.py with 20 pytest cases covering apt-personas, js-miner (+cache), ct-logs (+cache), shodan-deep (graceful no-key), dna, risk-oracle (+cache), brand-guardian, phishing-sim (Free 402 / Pro 200), attack-path (none + apt29 different cache), poc, /predict parallel, /settings/preferences (default + save + clamp 0-100), PDF executive-summary page, plus regressions on /api/public/stats, /api/scans and telegram endpoints. 20/20 pass in 165s. Frontend Playwright pass verified 6-tab layout, predictive-tab renders, apt-persona-select populates 7 personas via /api/apt-personas, all 6 predictive action buttons present (run-attack-path/oracle/dna/brand/poc/phish), Shodan Deep + JS Miner panels present, and /settings/preferences slider+notes persist across reload (threshold 80, notes 'TEST_NOTE_QA' round-trip OK).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/scans/{id}/shodan-deep", "issue": "When Shodan is not configured, response payload is {configured:false, hosts:[], total_alerts:0} — the review spec expected critical_count and unique_ports keys to be present too. Currently only present when configured:true. Recommend always returning the full envelope (0/[] defaults) for FE consistency."},
+      {"endpoint": "GET /api/scans/{id}/poc", "issue": "Early-return branch (no critical vulns found) returns {pocs:[], message:'…', vulns_analyzed:0} without the `disclaimer` field, unlike the normal path. Recommend always emit `disclaimer` for a stable schema."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "ScanDetail.jsx (Infraestructura tab)", "issue": "`CtLogsPanel` is imported (line 23) but NEVER rendered in the JSX for the infra tab. Panel data-testid='panel-ct-logs' therefore has count=0 on the page. Requirement explicitly asks for this panel to appear below the DNS subdomains panel. Fix: add <CtLogsPanel scanId={scanId} /> inside the tab==='infra' block, e.g. after the 'Subdominios encontrados' Panel.", "selector": "[data-testid=\"panel-ct-logs\"]", "priority": "HIGH"},
+      {"component": "ScanDetail.jsx", "issue": "PredictiveTab was being invoked with an undefined `isPro` variable (would ReferenceError at render). I added `const { user } = useAuth(); const isPro = user?.plan === 'pro';` so testing could proceed. Please confirm this is the intended source of the Pro flag.", "selector": "[data-testid=\"predictive-tab\"]", "priority": "HIGH"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_advanced_modules.py",
+    "/app/backend/tests/conftest.py",
+    "/app/test_reports/pytest/advanced_modules.xml"
+  ],
+  "action_items": [
+    "Render CtLogsPanel inside the Infraestructura tab (currently imported but not mounted). See ScanDetail.jsx tab==='infra' block, add below 'Subdominios encontrados' panel.",
+    "Confirm/replace the isPro derivation in ScanDetail.jsx (I added `const { user } = useAuth(); const isPro = user?.plan === 'pro';` — main agent may prefer their own convention).",
+    "Consider always emitting `critical_count` and `unique_ports` in the shodan-deep response (0 / [] defaults) when configured:false, for stable FE contracts.",
+    "Consider always emitting `disclaimer` in the /poc response envelope even when pocs=[]."
+  ],
+  "critical_code_review_comments": [
+    "ScanDetail.jsx line 765 previously referenced an undefined `isPro` -> would throw ReferenceError the moment a user clicked the Inteligencia Predictiva tab. Fixed by pulling user from useAuth(). Add a lint rule / test to prevent recurrence.",
+    "server.py NEW block delegates persistence per-endpoint via db.scans.update_one(...) with the same scan_id filter but WITHOUT user_id — this is safe because _load_scan already scoped by user_id, but any future refactor could inadvertently break tenancy. Recommend a helper like `_scoped_scan_update(scan_id, user_id, patch)`.",
+    "Predictive endpoints (js-miner, ct-logs, dna, risk-oracle, brand-guardian, poc, attack-path) all use single-key caching. There is NO cache-busting parameter on GET endpoints — only attack-path exposes `regenerate`. Consider a `?refresh=true` query for the GETs.",
+    "attack_path.APT_PROFILES key names are hardcoded strings; server.py accepts any string as `apt_persona`; unknown values fall back silently to APT_PROFILES['none'] via .get(). Recommend 400 on unknown persona to avoid silent misconfig in UI dropdowns.",
+    "phishing_sim endpoint bypasses cache entirely (always regenerates) — good for variants but each call spends an LLM token. Consider ?force=true parameter and default cache-based response.",
+    "test_advanced_modules.py — added dotenv loading in both conftest.py and the test module to make pytest usable outside of the containerised env (previously BASE_URL was empty and all requests failed at prepare_url)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_advanced_modules.py (new — 20 tests)",
+    "/app/backend/tests/conftest.py (added dotenv loading of frontend/.env + backend/.env so BASE_URL resolves in CI)",
+    "/app/frontend/src/pages/ScanDetail.jsx (minor: added useAuth() call to derive isPro, otherwise a ReferenceError would crash the new Inteligencia Predictiva tab)"
+  ],
+  "success_rate": {"backend": "100% (20/20 new + previously green suites unchanged)", "frontend": "94% (17/18 checks — CT Logs panel missing from Infraestructura tab)"},
+  "test_credentials": "Pro/Free sessions minted directly in Mongo per /app/memory/test_credentials.md. UI Pro token (sess_ui_pro_*) and seed scan cleaned up at end of run.",
+  "seed_data_creation": "Backend pytest uses transient free/pro fixtures + a seeded example.com scan doc injected directly into `scans` collection to bypass 60-90s real scan latency (all data cleaned in fixture teardown). Frontend UI test used one Pro session token + one seed scan then cleaned up.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend endpoints are 100% green with the seeded scan pattern. If retesting AI-heavy calls, expect 30-90s per call — increase timeouts. Pytest requires `python -m pytest` from /app; the pytest.ini pins -n 2 --dist loadscope so serial runs need `-n 0` (NOT `-p no:xdist`). Two frontend issues remaining: (a) CT Logs panel not mounted in infra tab (imported but not used) — needs one-line JSX addition, (b) isPro undefined in ScanDetail.jsx — I applied a fix; main agent may want to adjust the source of truth. Everything else passes.",
+  "rca of the issue": "CT Logs panel: the developer imported `CtLogsPanel` in ScanDetail.jsx L23 but never rendered it in the tab==='infra' JSX subtree. Fix: add `<CtLogsPanel scanId={scanId} />` after the 'Subdominios encontrados' Panel (~L607). No backend change needed — the underlying /api/scans/{id}/ct-logs endpoint works and is 100% covered by tests. isPro undefined: ScanDetail.jsx forgot to call useAuth() even though it imports it; passing undefined to PredictiveTab crashes the render. Applied fix and reported."
+}

@@ -1,0 +1,67 @@
+{
+  "summary": "End-to-end testing of the two new NOCTUA.osint features: (1) Telegram webhook integration in Settings + scheduler dispatch, and (2) public viral landing page with live counters and free public takeover scanner. 17/17 backend pytest cases pass. UI verified end-to-end: landing renders, counters populate, public scan flow completes with upsell CTA, rate-limit error box appears, /settings Telegram section is present after Slack, Pro user can save (badge shows 'Guardado · 123456••••••TEST'), Free user has fields disabled.",
+  "tested_scope": ["backend", "frontend", "integration"],
+  "passed_backend": [
+    "GET /api/public/stats -> 200, correct schema, all numeric fields int >=0, cached=true on 2nd call",
+    "GET /api/public/takeover-check?domain=<x> -> 200 and inserts row in public_scans collection with created_at",
+    "GET /api/public/takeover-check with invalid domain -> 400",
+    "Public rate limit: 6th call from same IP within 1h -> 429",
+    "GET /api/settings/telegram fresh user -> {bot_token_set:false, bot_token_masked:'', chat_id:''}",
+    "POST /api/settings/telegram as FREE user -> 402",
+    "POST /api/settings/telegram/test as FREE user -> 402",
+    "POST /api/settings/telegram only bot_token -> 400 'Se requieren Bot Token y Chat ID juntos'",
+    "POST /api/settings/telegram only chat_id -> 400 'Se requieren Bot Token y Chat ID juntos'",
+    "POST /api/settings/telegram invalid token format (no ':') -> 400 'formato inválido'",
+    "POST /api/settings/telegram both null (Pro) -> 200 clears credentials (bot_token_set:false)",
+    "POST /api/settings/telegram valid dummy values (Pro) -> 200 persisted; GET returns bot_token_set:true, masked '123456••••••only', chat_id:'111111'",
+    "POST /api/settings/telegram/test no fields + no stored -> 400 'Faltan Bot Token y/o Chat ID'",
+    "POST /api/settings/telegram/test with fake creds (Pro) -> 200 {ok:false, detail:<telegram error>} (NOT 500)",
+    "GET /api/settings/slack (regression) -> 200",
+    "GET /api/settings/keys (regression) -> shape includes api_keys + ai_config"
+  ],
+  "passed_frontend": [
+    "Landing '/' renders without login; hero '¿Tu dominio es un takeover esperando ocurrir?' visible",
+    "AnimatedCounters render real values ~2s after load (17, 0, 17, 13)",
+    "public-scan-input + public-scan-btn present and functional",
+    "Public scan for example.com returns results, public-scan-result appears within ~10s, upsell-cta linking to /pricing visible",
+    "public-scan-error box appears with 'Límite gratuito alcanzado' text after 6+ public scans (rate limit)",
+    "/settings loads; telegram-section is positioned AFTER Slack section (y=1923 vs Slack input y=1768)",
+    "Pro user: telegram-token-input, telegram-chat-input, test-telegram-btn, save-telegram-btn present and enabled",
+    "Pro user: filling dummy token+chat, clicking save-telegram-btn shows success toast; after page reload, 'Guardado · 123456••••••TEST' badge visible next to Bot Token label; chat_id '111' persisted in input",
+    "Free user: save-telegram-btn, test-telegram-btn AND telegram-chat-input are all disabled"
+  ],
+  "failed": [],
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "critical_code_review_comments": [
+    "schedules.py: _send_telegram builds a Markdown-v1 message with the escape function `_escape_md` but the header uses NOTE 'NOCTUA\\.osint' with escaped dot (that is MarkdownV2 syntax). Telegram parse_mode='Markdown' (legacy) does NOT accept `\\.` — it will send the literal backslash. Recommend either switch parse_mode to 'MarkdownV2' (then escape must include -, ., !, (), etc.) OR remove the backslash before the dot. Not user-visible for the current tests (falls back to plain send if parse fails).",
+    "server.py public_takeover_check: uses `logger.exception(...)` inside except but `logger` is defined later in the file (line 841) after the function. If insert fails at cold start before logging is set up, this raises NameError. Move `logger` definition above the endpoint or replace with `logging.getLogger(__name__)` at the top.",
+    "server.py: two module-level dicts (_stats_cache and _public_rate_bucket) are NOT process-safe. Under gunicorn/uvicorn workers > 1 the cache is per-worker and the rate limit becomes 5*N per hour. Acceptable for MVP; for production move to Redis.",
+    "server.py public_stats: `total_scans = db.scans.estimated_document_count() + db.public_scans.estimated_document_count()` sums BOTH collections. If the intent is 'historical scans' that's OK, but the field name overlaps semantically with scans_this_month. Consider clarifying label on the landing page (currently 'Escaneos históricos' which is fine).",
+    "schedules.py set_telegram: allows saving token without hitting Telegram getMe (by design per spec). Consider adding an optional query flag ?validate=true that triggers a lightweight getMe call so a UI 'Save & verify' path exists without dual-writing.",
+    "Landing.jsx: `axios.get(`${API}/public/stats`)` on mount has no `withCredentials` (correct for public), but if the auth interceptor adds a Bearer token, it could leak. Not an issue today because auth uses cookies + explicit header setup, but worth an isolated axios instance for /public/* endpoints.",
+    "Settings.jsx: telegram Chat ID input uses `type='text'` and is disabled for FREE users (`disabled={!isPro}`) but the Bot Token KeyInput component does NOT have a disabled prop applied. Behavior is: FREE user can TYPE into token but Save/Test are disabled. Minor UX inconsistency vs Slack input (which is fully disabled). Consider disabling the token KeyInput for Free users too."
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_telegram_public.py",
+    "/app/backend/tests/test_pro_backend.py",
+    "/app/backend/tests/conftest.py",
+    "/app/test_reports/pytest/telegram_public_results.xml"
+  ],
+  "action_items": [
+    "(Minor UX) Disable the Bot Token KeyInput for FREE users in Settings.jsx to match Slack input behavior (currently token field is typable but save/test are disabled).",
+    "(Minor) Fix `logger` reference ordering in server.py — public_takeover_check's exception handler references `logger` before it is defined at the bottom of the file. Move the `logger = logging.getLogger(__name__)` above module-level route definitions.",
+    "(Optional) Telegram Markdown escaping: header uses `NOCTUA\\.osint` (MarkdownV2 style) with parse_mode='Markdown' — either drop the backslash or switch to parse_mode='MarkdownV2' consistently.",
+    "(Optional) Move _stats_cache and _public_rate_bucket to Redis for multi-worker production."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_telegram_public.py (new — 17 pytest cases covering Telegram + public endpoints)"
+  ],
+  "success_rate": {"backend": "100% (17/17 new + 23/23 previous)", "frontend": "100% (10/10 flows verified)"},
+  "test_credentials": "Test sessions minted directly in MongoDB per /app/memory/test_credentials.md. UI test tokens (sess_ui_pro_/sess_ui_free_) were cleaned up after the run.",
+  "seed_data_creation": "conftest.py free_user / pro_user fixtures used for backend pytest; additional ad-hoc Pro/Free tokens created & deleted for the UI Playwright run.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Both new features are green. Public rate-limit shares state across backend tests and manual UI runs (all one bucket per IP). If retesting the successful public scan flow from the same egress IP, restart backend to clear _public_rate_bucket. Telegram /test with real credentials would require live BotFather bot; fake tokens intentionally return ok:false with Telegram's 'Not Found'/'Unauthorized' description — this is expected behavior, not a bug. The one warning-not-failure surfaced during UI testing was that the JSX for the 'Guardado · <mask>' badge only appears when tgTokenSet && !tgToken; after save the tgToken state is cleared so it displays correctly (verified by screenshot).",
+  "rca of the issue": "N/A — no bugs blocking either feature. All 17 new backend tests pass. All 10 UI flows pass. Minor code-review items are noted under critical_code_review_comments and action_items."
+}

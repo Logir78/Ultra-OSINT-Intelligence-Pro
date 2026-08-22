@@ -1,0 +1,27 @@
+{
+  "summary": "Backend smoke tests for OSINT Scanner API. All 10 requested backend scenarios passed: root, auth (me/session/logout), scan create with & without AI summary, list, get by id (own + cross-user 404), and delete. Claude Sonnet 4.5 AI summary generates ~2.2KB markdown in Spanish. Tests used real Mongo sessions per /app/memory/test_credentials.md against the public REACT_APP_BACKEND_URL.",
+  "tested_scope": ["backend", "auth", "integration"],
+  "passed": [
+    "GET /api/ -> 200 {service, status: ok}",
+    "GET /api/auth/me without auth -> 401 Not authenticated",
+    "GET /api/auth/me with Bearer -> 200 returns user_id/email/name",
+    "POST /api/auth/session with invalid session_id -> 401 Invalid session_id",
+    "POST /api/scan without auth -> 401",
+    "POST /api/scan example.com ai_summary=false -> 200 full result (domain, ip, whois, dns[A/AAAA/MX/NS/TXT/CNAME/SOA/CAA], ssl, http_headers, https_headers, subdomains, ports.open_ports=[80,443,8080,8443], security.basic/medium/advanced with items and score)",
+    "GET /api/scans -> 200 list with overview {ip, open_ports, score_basic/medium/advanced}",
+    "GET /api/scans/{id} own -> 200 with full result",
+    "GET /api/scans/{id} other user -> 404 Scan not found",
+    "DELETE /api/scans/{id} -> 200 {ok:true}; subsequent GET -> 404",
+    "POST /api/scan ai_summary=true -> 200 with Claude-generated Spanish markdown summary (2219 chars)",
+    "POST /api/auth/logout with cookie -> 200; session removed from Mongo; subsequent /api/auth/me -> 401"
+  ],
+  "failed": [],
+  "observations": [
+    "example.com resolved to Cloudflare IP 172.66.147.243 during test window; ssl.success=false for this response but object is present with all fields (transient/expected due to fronting). Not a defect for API contract testing.",
+    "AI summary latency ~15-25s; well under the 90s budget."
+  ],
+  "action_items": [],
+  "success_rate": {"backend": "100%", "frontend": "not tested (backend-only per request)"},
+  "retest_needed": false,
+  "full_testing_deferred": true
+}

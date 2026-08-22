@@ -1,0 +1,69 @@
+{
+  "summary": "Backend testing for NOCTUA.osint Pro plan (Stripe + Scheduled Scans + Alerts + Slack). All 23 backend tests passed. Discovered and fixed a critical env load-order bug in server.py causing STRIPE_SECRET_KEY to be missed at import time. Scheduler worker executes within ~65s and correctly stamps scans with source='scheduled' and schedule.last_scan_id.",
+  "tested_scope": ["backend", "auth", "stripe", "scheduler", "integration"],
+  "passed": [
+    "GET /api/ -> 200 (regression)",
+    "GET /api/auth/me without auth -> 401",
+    "GET /api/auth/me returns plan and slack_webhook_url",
+    "POST /api/scan (regression) -> 200",
+    "GET /api/scans (regression) -> 200",
+    "GET /api/payments/plan without auth -> 401",
+    "GET /api/payments/plan with free user -> {plan:'free'}",
+    "GET /api/payments/plan with pro user (mongo-set) -> {plan:'pro'}",
+    "POST /api/payments/checkout returns checkout_url + session_id, persists payment_transactions with status=initiated/payment_status=pending",
+    "POST /api/payments/cancel without stripe_subscription_id -> 400",
+    "POST /api/schedules without pro -> 402 'Pro plan required'",
+    "POST /api/settings/slack without pro -> 402",
+    "POST /api/schedules with pro -> 200; returns schedule_id, domain, frequency, alert_types, enabled=true, next_run_at",
+    "GET /api/schedules isolated per user (second user sees empty list)",
+    "PATCH /api/schedules/{id} toggles enabled true<->false",
+    "DELETE /api/schedules/{id} -> 200; subsequent DELETE -> 404",
+    "GET /api/alerts empty for new user",
+    "GET /api/alerts sorted by created_at desc",
+    "POST /api/alerts/{id}/read marks read=true in Mongo",
+    "GET /api/settings/slack -> {webhook_url: null} for new user",
+    "POST /api/settings/slack invalid URL -> 400",
+    "POST /api/settings/slack valid https://hooks.slack.com/... -> 200 saved and persisted",
+    "Scheduler worker: schedule for example.com executed within ~65s (interval=60s), scan stored with source='scheduled' and schedule_id, schedule.last_scan_id populated, next_run_at advanced"
+  ],
+  "failed": [],
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/payments/checkout", "issue": "Uses hardcoded fallback string 'sk_test_emergent' if STRIPE_SECRET_KEY is missing — would silently 500 with Stripe AuthenticationError. Prefer failing fast (raise) or removing the fallback."},
+      {"endpoint": "/api/stripe/webhook", "issue": "Not signature-verified in this test iteration (per request). Webhook path is /api/stripe/webhook — mounted correctly. No auth wrapper; correct for Stripe callbacks."}
+    ]
+  },
+  "critical_code_review_comments": [
+    "FIXED by testing agent: In server.py, `import payments` and `import schedules` were executed BEFORE `load_dotenv(ROOT_DIR/'.env')`. Because payments.py sets `stripe.api_key = os.environ.get('STRIPE_SECRET_KEY') or 'sk_test_emergent'` at module import time, the real key from backend/.env was never applied and /api/payments/checkout returned 500 (stripe AuthenticationError 'sk_test_****gent'). Moved load_dotenv above the imports. Recommend removing the 'sk_test_emergent' fallback entirely so a missing key fails fast at startup, not at first user checkout.",
+    "payments.py imports stripe at module top and configures api_key at import time. Consider lazy configuration or wrapping in a helper so tests/env changes don't require restarts.",
+    "schedules.py _diff_ports assumes each port dict has key 'port'; osint_engine returns items like {'port': N, ...}. OK today, but add defensive .get to avoid KeyError on partial results.",
+    "schedules.py alert dedup: no idempotency — if scheduler is triggered twice for the same run (e.g., race after restart), duplicate alerts could be created. Consider a unique index on (schedule_id, scan_id, type) or skip if alerts already exist for this scan_id.",
+    "server.py .on_event('startup')/('shutdown') are deprecated in FastAPI; migrate to lifespan handler.",
+    "payments.py cancel_subscription: after calling stripe.Subscription.delete, code sets plan='free' immediately, but Stripe may take time. Also unsets plan even if the actual subscription id is invalid. Verify via webhook customer.subscription.deleted (already handled). Consider marking pending_cancel and letting the webhook flip plan.",
+    "No rate limiting on /api/scan or /api/schedules; a Pro user could create many schedules for expensive domains. Consider max schedules per user."
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_pro_backend.py",
+    "/app/backend/tests/conftest.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "(Optional) Remove hardcoded 'sk_test_emergent' fallback in payments.py:9 — prefer fail-fast on missing STRIPE_SECRET_KEY.",
+    "(Optional) Migrate FastAPI on_event handlers to lifespan.",
+    "(Optional) Add idempotency to alert creation.",
+    "(Optional) Enforce a limit on schedules per user."
+  ],
+  "updated_files": [
+    "/app/backend/server.py (moved load_dotenv above payments/schedules import to fix env load-order bug)",
+    "/app/backend/tests/conftest.py (created)",
+    "/app/backend/tests/test_pro_backend.py (created — 23 pytest test cases)"
+  ],
+  "success_rate": {"backend": "100% (23/23)", "frontend": "not tested (backend-only per request)"},
+  "test_credentials": "Session tokens minted directly in Mongo per /app/memory/test_credentials.md. Fixtures create/tear down per test; pro users have plan='pro' set in users collection.",
+  "seed_data_creation": "conftest.py fixtures free_user / pro_user create user + user_sessions rows in test_database and clean up scans/schedules/alerts/payment_transactions on teardown.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend Pro-plan surface is green end-to-end. Scheduler is verified live (loop runs every 60s; schedule executes within ~60-90s). Signed Stripe webhook was NOT exercised (unsigned events would be rejected by construct_event). If a webhook drill is needed, either use Stripe CLI to forward with signature, or temporarily bypass STRIPE_WEBHOOK_SECRET verification. Alert-diff false-positive verification was skipped per the request (deterministic logic). If revisiting, run two scheduled executions on iana.org back-to-back and assert alerts collection remains empty.",
+  "rca of the issue": "SYMPTOM: POST /api/payments/checkout returned 500 with 'Invalid API Key provided: sk_test_****gent'. ROOT CAUSE: server.py imported the `payments` module before calling `load_dotenv`, so at import time payments.py evaluated `stripe.api_key = os.environ.get('STRIPE_SECRET_KEY') or 'sk_test_emergent'` with STRIPE_SECRET_KEY absent, permanently locking Stripe to the fake fallback for the process lifetime. REPRODUCE: (1) leave server.py as-is (imports before load_dotenv); (2) POST /api/payments/checkout with a valid session -> 500. MITIGATION APPLIED: moved `load_dotenv(ROOT_DIR/'.env')` above the `import payments`/`import schedules` lines in server.py. Recommended follow-up: drop the 'sk_test_emergent' fallback so a missing key surfaces immediately at startup rather than at checkout time."
+}

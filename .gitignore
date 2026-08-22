@@ -1,0 +1,60 @@
+# ---- Environment & secrets ----
+.env
+.env.*
+!.env.example
+*.env
+*.key
+*.pem
+credentials.json
+*credentials.json*
+*token.json*
+.credentials
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+/coverage
+htmlcov/
+.coverage
+
+# ---- Node / frontend ----
+node_modules/
+/.pnp
+.pnp.js
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+/build
+/dist
+dist/
+*.tsbuildinfo
+
+# ---- Logs ----
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# ---- Editors / OS ----
+.idea/
+.vscode/
+.DS_Store
+
+# ---- Build caches ----
+.cache/
+
+# ---- Deployment ----
+.vercel
+
+# ---- Generator artifacts (do not commit) ----
+.emergent/
+.gitconfig
