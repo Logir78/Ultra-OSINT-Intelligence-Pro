@@ -22,7 +22,7 @@ from app.core import db, client, logger
 from app.observability import setup_logging, install as install_observability
 from app.routers import (
     auth, auth_native, scans, intel, settings, breaches, copilot, commerce, public,
-    notary, exploit, bounty_pro, glassbox, autopilot,
+    notary, exploit, bounty_pro, glassbox, autopilot, scan_jobs,
 )
 
 # Structured logging (LOG_FORMAT=json|plain, LOG_LEVEL=INFO). Fase 2.
@@ -32,7 +32,7 @@ app = FastAPI(title="OSINT Scanner API")
 
 # ---- Routers (all under /api) ---------------------------------------------
 api_router = APIRouter(prefix="/api")
-for module in (auth, auth_native, scans, intel, settings, breaches, copilot, commerce, public, notary, exploit, bounty_pro, glassbox, autopilot):
+for module in (auth, auth_native, scans, intel, settings, breaches, copilot, commerce, public, notary, exploit, bounty_pro, glassbox, autopilot, scan_jobs):
     api_router.include_router(module.router)
 app.include_router(api_router)
 
@@ -70,6 +70,7 @@ install_observability(app)
 
 # ---- Lifecycle ------------------------------------------------------------
 _scheduler_task = None
+_worker_task = None
 
 
 @app.on_event("startup")
@@ -78,12 +79,17 @@ async def start_scheduler():
     _scheduler_task = asyncio.create_task(
         schedules_mod.scheduler_loop(db, interval_seconds=60)
     )
-    logger.info("Scheduler task started")
+    from app.jobs import worker_loop
+    global _worker_task
+    _worker_task = asyncio.create_task(worker_loop(db, interval_seconds=2))
+    logger.info("Scheduler + scan worker tasks started")
 
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
-    global _scheduler_task
+    global _scheduler_task, _worker_task
     if _scheduler_task:
         _scheduler_task.cancel()
+    if _worker_task:
+        _worker_task.cancel()
     client.close()

@@ -1,0 +1,30 @@
+# Fly.io — backend NOCTUA. Despliega con:  fly launch --no-deploy  &&  fly deploy
+# (define los secretos con `fly secrets set MONGO_URL=... DB_NAME=... etc.`)
+app = "noctua-osint"
+primary_region = "mad"   # Madrid; cámbialo si quieres
+
+[build]
+  dockerfile = "backend/Dockerfile"
+
+[env]
+  LOG_FORMAT = "json"
+  RATE_LIMIT_ENABLED = "1"
+  SSRF_GUARD = "1"
+
+[http_service]
+  internal_port = 8001
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    method = "GET"
+    path = "/api/health"
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "20s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
