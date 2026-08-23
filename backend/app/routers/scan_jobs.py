@@ -13,6 +13,8 @@ async def create_async_scan(req: ScanRequest, user=Depends(get_current_user)):
     """Encola un escaneo y devuelve un job_id al instante (no bloquea)."""
     if not req.domain or len(req.domain.strip()) < 3:
         raise HTTPException(status_code=400, detail="Dominio inválido")
+    from app import usage
+    await usage.check_and_increment(db, user)  # cuota por plan (P1)
     return await jobs.enqueue_scan(
         db, user["user_id"], req.domain.strip(),
         extended_ports=req.extended_ports, ai_summary=req.ai_summary,

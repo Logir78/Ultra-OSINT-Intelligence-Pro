@@ -24,6 +24,8 @@ router = APIRouter()
 async def scan(req: ScanRequest, user=Depends(get_current_user)):
     if not req.domain or len(req.domain.strip()) < 3:
         raise HTTPException(status_code=400, detail="Dominio inválido")
+    from app import usage
+    await usage.check_and_increment(db, user)  # cuota por plan (P1)
     try:
         assert_public_host(req.domain)  # anti-SSRF guard (SSRF_GUARD env, default on)
     except ValueError as e:

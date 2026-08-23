@@ -434,3 +434,24 @@ para aceptar claves. Toda la API (~120 endpoints) queda accesible programáticam
 **Verificado (TestClient):** clave creada (`nk_`), auth por `X-API-Key` y por
 `Bearer` (200 sin cookie), clave inválida y revocada → 401, la lista no expone la
 clave completa. App: **123 rutas**.
+
+---
+
+## 💳 P1 · Metering — límites de uso por plan
+
+Nuevos `app/usage.py` + `app/routers/usage.py`. Cuenta escaneos por usuario y mes y
+aplica el límite del plan (lo que convierte la API en negocio con tiers).
+
+- `GET /api/usage` → `{plan, period, used, limit, remaining}` del mes actual.
+- Los escaneos (`POST /api/scan` y `POST /api/scan/async`) descuentan cuota; al
+  agotarla devuelven **402** con un mensaje de "mejora a Pro".
+- Límites por entorno: `FREE_SCAN_LIMIT` (def. 20), `PRO_SCAN_LIMIT` (def. 500),
+  enterprise = ilimitado. El plan sale de `user.plan` (que Stripe debe fijar a `pro`
+  al pagar — pendiente conectar el webhook de Stripe a ese cambio).
+
+**Verificado (TestClient):** free con límite 2 → escaneos 1-2 `200`, el 3º `402
+quota_exceeded`; `/usage` refleja `used/remaining`; Pro (límite 100) no se bloquea.
+App: **124 rutas**.
+
+> Nota: el chequeo es leer-y-sumar (pequeña condición de carrera con altísima
+> concurrencia); para rigor total, usar un contador atómico condicionado.
