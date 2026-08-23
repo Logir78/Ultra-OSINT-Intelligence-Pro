@@ -42,8 +42,24 @@ async def get_current_user(
     authorization: Optional[str] = Header(default=None),
 ) -> dict:
     token = request.cookies.get("session_token")
-    if not token and authorization and authorization.startswith("Bearer "):
-        token = authorization.split(" ", 1)[1]
+    bearer = None
+    if authorization and authorization.startswith("Bearer "):
+        bearer = authorization.split(" ", 1)[1]
+
+    # --- API key path (programmatic access) ---
+    api_key = request.headers.get("x-api-key")
+    if not api_key and bearer and bearer.startswith("nk_"):
+        api_key = bearer
+    if api_key:
+        from app.apikeys import verify_api_key
+        key_user = await verify_api_key(db, api_key)
+        if not key_user:
+            raise HTTPException(status_code=401, detail="Invalid API key")
+        return key_user
+
+    # --- Session path (browser) ---
+    if not token and bearer:
+        token = bearer
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
 

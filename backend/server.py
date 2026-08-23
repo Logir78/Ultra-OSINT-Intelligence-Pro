@@ -22,7 +22,7 @@ from app.core import db, client, logger
 from app.observability import setup_logging, install as install_observability
 from app.routers import (
     auth, auth_native, scans, intel, settings, breaches, copilot, commerce, public,
-    notary, exploit, bounty_pro, glassbox, autopilot, scan_jobs,
+    notary, exploit, bounty_pro, glassbox, autopilot, scan_jobs, apikeys,
 )
 
 # Structured logging (LOG_FORMAT=json|plain, LOG_LEVEL=INFO). Fase 2.
@@ -32,7 +32,7 @@ app = FastAPI(title="OSINT Scanner API")
 
 # ---- Routers (all under /api) ---------------------------------------------
 api_router = APIRouter(prefix="/api")
-for module in (auth, auth_native, scans, intel, settings, breaches, copilot, commerce, public, notary, exploit, bounty_pro, glassbox, autopilot, scan_jobs):
+for module in (auth, auth_native, scans, intel, settings, breaches, copilot, commerce, public, notary, exploit, bounty_pro, glassbox, autopilot, scan_jobs, apikeys):
     api_router.include_router(module.router)
 app.include_router(api_router)
 

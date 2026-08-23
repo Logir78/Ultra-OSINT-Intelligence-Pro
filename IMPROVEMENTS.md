@@ -416,3 +416,21 @@ escaneo creado en `db.scans`; sin jobs pendientes devuelve `False`. App: **121 r
 
 > Para varias instancias del backend, mover el worker a un proceso aparte o a
 > `arq`/Redis (el claim actual es seguro con una sola instancia).
+
+---
+
+## 🔌 P1 · API pública + API keys
+
+Nuevos `app/apikeys.py` + `app/routers/apikeys.py`, y `get_current_user` extendido
+para aceptar claves. Toda la API (~120 endpoints) queda accesible programáticamente.
+
+- `POST /api/apikeys` crea una clave `nk_…` (se muestra **una vez**; solo se guarda
+  el hash SHA-256). `GET /api/apikeys` lista (sin exponer la clave). `DELETE
+  /api/apikeys/{id}` revoca.
+- Autenticación por `X-API-Key: nk_…` **o** `Authorization: Bearer nk_…`, además de
+  la sesión de navegador.
+- `API.md` documenta el uso con `curl`; FastAPI ya sirve la doc interactiva en `/docs`.
+
+**Verificado (TestClient):** clave creada (`nk_`), auth por `X-API-Key` y por
+`Bearer` (200 sin cookie), clave inválida y revocada → 401, la lista no expone la
+clave completa. App: **123 rutas**.
