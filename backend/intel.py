@@ -5,7 +5,10 @@ import uuid
 import logging
 from typing import Optional
 from datetime import datetime, timezone
-from emergentintegrations.llm.chat import LlmChat, UserMessage
+try:
+    from emergentintegrations.llm.chat import LlmChat, UserMessage
+except Exception:  # paquete privado no disponible fuera de Emergent
+    LlmChat = UserMessage = None
 
 log = logging.getLogger("intel")
 
