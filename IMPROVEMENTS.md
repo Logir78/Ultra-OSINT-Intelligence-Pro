@@ -390,3 +390,29 @@ y al notarizar (#2) el reporte incrusta el hash sellado. Validado con `esbuild`.
 
 > Falta la prueba visual real (`yarn build` / `make up`) y, si quieres, un botón de
 > Autopilot también en el Dashboard.
+
+---
+
+## 🚀 Camino a servicio de élite — P0 (producción)
+
+### ✅ Cola de escaneos en segundo plano (no bloqueante)
+
+Nuevos `app/jobs.py` + `app/routers/scan_jobs.py`. Los escaneos largos ya no
+bloquean la petición:
+- `POST /api/scan/async` → encola y devuelve `job_id` al instante.
+- `GET /api/scan/jobs` / `GET /api/scan/jobs/{id}` → progreso (`queued → running →
+  done/failed`, con `stage` y `progress`).
+- Un **worker** arranca con el backend (junto al scheduler) y procesa la cola con
+  claim atómico (`find_one_and_update`). Cero infra nueva: usa el MongoDB existente.
+  El escaneo terminado se guarda en `db.scans` como uno normal.
+
+**Verificado:** encolar → `queued`; el worker procesa → `done` al 100% con el
+escaneo creado en `db.scans`; sin jobs pendientes devuelve `False`. App: **121 rutas**.
+
+### ✅ Listo para desplegar
+- `DEPLOY.md` — guía paso a paso (Railway recomendado + Fly.io) con MongoDB Atlas y
+  checklist P0 previo a abrir al público.
+- `fly.toml` — configuración de Fly para el backend (healthcheck a `/api/health`).
+
+> Para varias instancias del backend, mover el worker a un proceso aparte o a
+> `arq`/Redis (el claim actual es seguro con una sola instancia).
